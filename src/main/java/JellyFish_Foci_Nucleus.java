@@ -68,7 +68,7 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
                 outDir.mkdir();
             }
             // Write header in results file
-            String header = "Image name\tNucleus ID\tNucleus volume (µm3)\tFoci nb\tFoci volume(µm3)\tFoci sum intensity\n";
+            String header = "Image name\tNucleus ID\tNucleus volume (µm3)\tFoci nb\t#Foci\tFoci volume(µm3)\tFoci sum intensity\n";
             FileWriter fwResults = new FileWriter(outDirResults + "results.xls", false);
             outPutResults = new BufferedWriter(fwResults);
             outPutResults.write(header);
@@ -99,7 +99,7 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
             
             for (String f : imageFiles) {
                 String rootName = FilenameUtils.getBaseName(f);
-                tools.print("--- ANALYZING IMAGE " + rootName + " ------");
+                System.out.println("--- ANALYZING IMAGE " + rootName + " ------");
                 reader.setId(f);
                 
                 ImporterOptions options = new ImporterOptions();
@@ -109,17 +109,18 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
                 options.setColorMode(ImporterOptions.COLOR_MODE_GRAYSCALE);
                 
                 // Open DAPI channel
-                tools.print("- Analyzing " + tools.channelNames[0] + " channel -");
+                System.out.println("- Analyzing " + tools.channelNames[0] + " channel -");
                 int indexCh = ArrayUtils.indexOf(chsName, channels[0]);
                 ImagePlus imgDAPI = BF.openImagePlus(options)[indexCh];
                 
                 // Find DAPI nuclei with StarDist
                 System.out.println("Finding " + tools.channelNames[0] + " nuclei....");
-                Objects3DIntPopulation nucPop = tools.stardistNucleiPop(imgDAPI);
+                //Objects3DIntPopulation nucPop = tools.stardistNucleiPop(imgDAPI);
+                Objects3DIntPopulation nucPop = tools.cellposeDetection(imgDAPI, 0.5, true);
                 System.out.println(nucPop.getNbObjects() + " " + tools.channelNames[0] + " nuclei found");
 
                 // Open Foci channel
-                tools.print("- Analyzing " + tools.channelNames[1] + " channel -");
+                System.out.println("- Analyzing " + tools.channelNames[1] + " channel -");
                 indexCh = ArrayUtils.indexOf(chsName, channels[1]);
                 ImagePlus imgFoci = BF.openImagePlus(options)[indexCh];
                 
@@ -139,6 +140,6 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
         } catch (IOException | FormatException | DependencyException | ServiceException | io.scif.DependencyException ex) {
             Logger.getLogger(JellyFish_Foci_Nucleus.class.getName()).log(Level.SEVERE, null, ex);
         }
-        tools.print("--- All done! ---");
+        System.out.println("--- All done! ---");
     }    
 }    

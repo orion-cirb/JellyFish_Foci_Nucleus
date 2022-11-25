@@ -1,15 +1,16 @@
 package JellyFish_Foci_Nucleus_Tools;
 
-import JellyFish_Foci_Nucleus_StardistOrion.StarDist2D;
+import JellyFich_Cellpose.CellposeSegmentImgPlusAdvanced;
+import JellyFich_Cellpose.CellposeTaskSettings;
+import JellyFish_StardistOrion.StarDist2D;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
-import ij.gui.Roi;
+import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
 import ij.plugin.RGBStackMerge;
-import ij.plugin.ZProjector;
 import ij.process.ImageProcessor;
 import io.scif.DependencyException;
 import java.awt.Color;
@@ -20,38 +21,24 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.ImageIcon;
 import loci.common.services.ServiceException;
 import loci.formats.FormatException;
 import loci.formats.meta.IMetadata;
 import loci.plugins.util.ImageProcessorReader;
 import mcib3d.geom2.BoundingBox;
-import mcib3d.geom2.Object3DComputation;
 import mcib3d.geom2.Object3DInt;
 import mcib3d.geom2.Objects3DIntPopulation;
 import mcib3d.geom2.Objects3DIntPopulationComputation;
 import mcib3d.geom2.measurements.MeasureIntensity;
-import mcib3d.geom2.measurements.MeasureObject;
 import mcib3d.geom2.measurements.MeasureVolume;
 import mcib3d.geom2.measurementsPopulation.MeasurePopulationColocalisation;
 import mcib3d.image3d.ImageHandler;
-import mcib3d.image3d.ImageInt;
 import net.haesleinhuepf.clij.clearcl.ClearCLBuffer;
 import net.haesleinhuepf.clij2.CLIJ2;
 import org.apache.commons.io.FilenameUtils;
 import org.scijava.util.ArrayUtils;
-import mcib3d.spatial.descriptors.F_Function;
-import mcib3d.spatial.descriptors.SpatialDescriptor;
-import mcib3d.spatial.sampler.SpatialModel;
-import mcib3d.spatial.sampler.SpatialRandomHardCore;
-import mcib3d.geom.Object3D;
-import mcib3d.geom.Objects3DPopulation;
-import mcib3d.geom2.VoxelInt;
 import mcib3d.geom2.measurements.MeasureCentroid;
-import mcib3d.geom2.measurements.MeasureFeret;
-import mcib3d.geom2.measurementsPopulation.PairObjects3DInt;
 
 /**
  * @author phm
@@ -60,37 +47,32 @@ public class Tools {
     private CLIJ2 clij2 = CLIJ2.getInstance();
     private final ImageIcon icon = new ImageIcon(this.getClass().getResource("/Orion_icon.png"));
     
-    public String[] channelNames = {"DAPI", "PML", "None"};
+    public String[] channelNames = {"DAPI", "Foci"};
     public Calibration cal = new Calibration();
     public double pixVol = 0;
     
+    // Cellpose
+    private final String cellposeEnvDirPath = (IJ.isLinux()) ? "/opt/miniconda3/envs/cellpose" : System.getProperty("user.home")+"\\miniconda3\\envs\\CellPose";
+    private String cellposeModel = "cyto2";
+    private int cellPoseNucDiameter = 60;
+    
+    //Stardist
     private Object syncObject = new Object();
     private final double stardistPercentileBottom = 0.2;
     private final double stardistPercentileTop = 99.8;
     private final double stardistProbThreshNuc = 0.5;
     private final double stardistOverlayThreshNuc = 0.25;
-    private final double stardistProbThreshDot = 0.1;
-    private final double stardistOverlayThreshDot = 0.25;
+    private final double stardistProbThreshFoci = 0.2;
+    private final double stardistOverlayThreshFoci = 0.25;
     private File modelsPath = new File(IJ.getDirectory("imagej")+File.separator+"models");
     public String stardistNucModel = "StandardFluo.zip";
     public String stardistFociModel = "pmls2.zip";
     private String stardistOutput = "Label Image"; 
     
-    private double minNucVol = 100;
-    private double maxNucVol = 5000;
-    private double intensityThresh = 50;
-    private double minFociVol = 0.01;
-    private double maxFociVol = 20;
-    private boolean computeSdi = true;
-    
-    
-    /**
-     * Display a message in the ImageJ console and status bar
-     */
-    public void print(String log) {
-        System.out.println(log);
-        IJ.showStatus(log);
-    }
+    private double minNucVol = 50;
+    private double maxNucVol = 1000;
+    private double minFociVol = 0.02;
+    private double maxFociVol = 2;
     
     
     /**
@@ -393,10 +375,10 @@ public class Tools {
         ImagePlus img = new Duplicator().run(imgFoci);
 
        // StarDist
-       File starDistModelFile = new File(modelsPath+File.separator+stardistNucModel);
+       File starDistModelFile = new File(modelsPath+File.separator+stardistFociModel);
        StarDist2D star = new StarDist2D(syncObject, starDistModelFile);
        star.loadInput(img);
-       star.setParams(stardistPercentileBottom, stardistPercentileTop, stardistProbThreshNuc, stardistOverlayThreshNuc, stardistOutput);
+       star.setParams(stardistPercentileBottom, stardistPercentileTop, stardistProbThreshFoci, stardistOverlayThreshFoci, stardistOutput);
        star.run();
        flush_close(img);
        
@@ -405,35 +387,47 @@ public class Tools {
        ImagePlus imgLabels = star.associateLabels(imgOut);
        imgLabels.setCalibration(cal); 
        flush_close(imgOut);
-       
-       Objects3DIntPopulation fociPop = new Objects3DIntPopulation(ImageHandler.wrap(imgLabels));      
+       Objects3DIntPopulation fociPop = new Objects3DIntPopulation(ImageHandler.wrap(imgLabels));  
+       System.out.println("Found "+fociPop.getNbObjects()+" foci");
        popFilterSize(fociPop, minFociVol, maxFociVol);
+       System.out.println("Found "+fociPop.getNbObjects()+" foci after size filter");
        flush_close(imgLabels);
        // labels foci with nucleus label
-       findNumberColocPop(nucPop, fociPop);
+       findFociInNucleusPop(nucPop, fociPop);
+       System.out.println("Found "+fociPop.getNbObjects()+" foci in nucleus");
        return(fociPop);
    }
    
-   
     /**
-     * Find dots population colocalizing with a cell objet 
-     */
-    public Objects3DIntPopulation findColocCell(Object3DInt cellObj, Objects3DIntPopulation dotsPop) {
-        Objects3DIntPopulation cellPop = new Objects3DIntPopulation();
-        cellPop.addObject(cellObj);
-        Objects3DIntPopulation colocPop = new Objects3DIntPopulation();
-        if (dotsPop.getNbObjects() > 0) {
-            MeasurePopulationColocalisation coloc = new MeasurePopulationColocalisation(cellPop, dotsPop);
-            for (Object3DInt dot: dotsPop.getObjects3DInt()) {
-                    double colocVal = coloc.getValueObjectsPair(cellObj, dot);
-                    if (colocVal > 0.75*dot.size()) {
-                        colocPop.addObject(dot);
-                    }
-            }
-        }
-        return(colocPop);
+    * Detect Cells with CellPose
+     * @param img
+     * @param factor
+     * @param resize
+     * @return 
+    */
+    public Objects3DIntPopulation cellposeDetection(ImagePlus img, double factor, boolean resize) {
+        // Resize image 
+        int imgWidth = img.getWidth();
+        int imgHeight = img.getHeight();
+        ImagePlus imgIn = (resize) ? img.resize((int)(imgWidth*factor), (int)(imgHeight*factor), 1, "none") : new Duplicator().run(img);
+        
+        // Set Cellpose settings
+        CellposeTaskSettings settings = new CellposeTaskSettings(cellposeModel, 1, cellPoseNucDiameter, cellposeEnvDirPath);
+        settings.useGpu(true);
+        settings.setStitchThreshold(0.25);
+        // Run Omnipose
+        CellposeSegmentImgPlusAdvanced cellpose = new CellposeSegmentImgPlusAdvanced(settings, imgIn);
+        ImagePlus imgOut = (resize) ? cellpose.run().resize(imgWidth, imgHeight, 1, "none") : cellpose.run();   
+        imgOut.setCalibration(cal);
+        Objects3DIntPopulation pop = new Objects3DIntPopulation(ImageHandler.wrap(imgOut));
+        Objects3DIntPopulation popFilter = new Objects3DIntPopulationComputation(pop).getExcludeBorders(ImageHandler.wrap(img), false);
+        popFilterOneZ(popFilter);
+        popFilterSize(popFilter, minNucVol, maxNucVol);
+        // Close images
+        flush_close(imgIn);
+        flush_close(imgOut);
+        return(pop);
     }
-    
      
     /**
      * 
@@ -464,15 +458,13 @@ public class Tools {
             Objects3DIntPopulation fociNucPop = findFociNuc(nucLabel, fociPop);
             int fociNb = fociNucPop.getNbObjects();
             file.write(imgName+"\t"+nucLabel+"\t"+nucVol+"\t"+fociNb+"\t");
-            for (Object3DInt foci : fociPop.getObjects3DInt()) {
+            for (Object3DInt foci : fociNucPop.getObjects3DInt()) {
                 float fociLabel = foci.getLabel();
-                if (fociLabel != 0)
+                double fociVol = new MeasureVolume(foci).getValueMeasurement(MeasureVolume.VOLUME_UNIT);
+                double fociInt = new MeasureIntensity(foci, ImageHandler.wrap(imgFoci)).getValueMeasurement(MeasureIntensity.INTENSITY_SUM);
+                if (fociLabel != 1)
                     file.write("\t\t\t\t");
-                else {
-                    double fociVol = new MeasureVolume(foci).getValueMeasurement(MeasureVolume.VOLUME_UNIT);
-                    double fociInt = new MeasureIntensity(foci, ImageHandler.wrap(imgFoci)).getValueMeasurement(MeasureIntensity.INTENSITY_SUM);
-                    file.write(fociLabel+"\t"+fociVol+"\t"+fociInt);
-                }
+                file.write(fociLabel+"\t"+fociVol+"\t"+fociInt+"\n");
                 file.flush();
             }
         }
@@ -484,13 +476,13 @@ public class Tools {
      * @param nucPop
      * @param fociPop
      */
-    public void findNumberColocPop(Objects3DIntPopulation nucPop, Objects3DIntPopulation fociPop) {
+    public void findFociInNucleusPop(Objects3DIntPopulation nucPop, Objects3DIntPopulation fociPop) {
         if (nucPop.getNbObjects() != 0 && fociPop.getNbObjects() != 0) {
-            for (Object3DInt bact : nucPop.getObjects3DInt()) {
+            for (Object3DInt nuc : nucPop.getObjects3DInt()) {
                 for (Object3DInt foci : fociPop.getObjects3DInt()) {
                     MeasureCentroid fociCenter = new MeasureCentroid(foci);
-                    if (bact.contains(fociCenter.getCentroidRoundedAsVoxelInt())){
-                       foci.setIdObject(bact.getLabel()); 
+                    if (nuc.contains(fociCenter.getCentroidRoundedAsVoxelInt())){
+                       foci.setIdObject(nuc.getLabel()); 
                     }
                 }
             }
@@ -538,13 +530,13 @@ public class Tools {
         nucPop.drawInImage(imgObj1);
         if (nucPop.getNbObjects() > 0)
             for (Object3DInt obj: nucPop.getObjects3DInt())
-                labelObject(obj, imgObj2.getImagePlus(), 40);
+                labelObject(obj, imgObj2.getImagePlus(), 20);
         
         // Draw foci in green
         ImageHandler imgObj3 = imgObj1.createSameDimensions();
         if (fociPop.getNbObjects() > 0)
             for (Object3DInt obj: fociPop.getObjects3DInt())
-                obj.drawObject(imgObj3, obj.getType());
+                obj.drawObject(imgObj3, 255);
         
         
         // Save image

@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package JellyFish_Foci_Nucleus_StardistOrion;
+package JellyFish_StardistOrion;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

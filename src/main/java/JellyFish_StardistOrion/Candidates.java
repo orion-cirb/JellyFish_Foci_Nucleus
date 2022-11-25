@@ -1,4 +1,4 @@
-package JellyFish_Foci_Nucleus_StardistOrion;
+package JellyFish_StardistOrion;
 
 import java.util.ArrayList;
 import java.util.Arrays;
