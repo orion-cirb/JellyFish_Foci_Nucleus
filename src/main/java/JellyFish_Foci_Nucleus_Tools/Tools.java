@@ -20,7 +20,6 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import static java.util.logging.Logger.getLogger;
 import javax.swing.ImageIcon;
 import loci.common.services.ServiceException;
 import loci.formats.FormatException;
@@ -340,9 +339,6 @@ public class Tools {
            img = new Duplicator().run(imgNuc);
        }
        
-       // Remove outliers
-       //IJ.run(img, "Remove Outliers", "block_radius_x=10 block_radius_y=10 standard_deviations=1 stack");
-       
        // StarDist
        File starDistModelFile = new File(modelsPath+File.separator+stardistNucModel);
        StarDist2D star = new StarDist2D(syncObject, starDistModelFile);
@@ -424,7 +420,7 @@ public class Tools {
         // Close images
         flush_close(imgIn);
         flush_close(imgOut);
-        return(pop);
+        return(popFilter);
     }
      
     /**
@@ -457,7 +453,7 @@ public class Tools {
             int fociNb = fociNucPop.getNbObjects();
             file.write(imgName+"\t"+nucLabel+"\t"+nucVol+"\t"+fociNb+"\t");
             if (fociNb == 0)
-                file.write("\t");
+                file.write("\n");
             for (Object3DInt foci : fociNucPop.getObjects3DInt()) {
                 float fociLabel = foci.getLabel();
                 double fociVol = new MeasureVolume(foci).getValueMeasurement(MeasureVolume.VOLUME_UNIT);
