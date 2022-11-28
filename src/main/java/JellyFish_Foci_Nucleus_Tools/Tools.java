@@ -1,12 +1,11 @@
 package JellyFish_Foci_Nucleus_Tools;
 
-import JellyFich_Cellpose.CellposeSegmentImgPlusAdvanced;
-import JellyFich_Cellpose.CellposeTaskSettings;
+import JellyFish_Cellpose.CellposeSegmentImgPlusAdvanced;
+import JellyFish_Cellpose.CellposeTaskSettings;
 import JellyFish_StardistOrion.StarDist2D;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
@@ -21,6 +20,7 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import static java.util.logging.Logger.getLogger;
 import javax.swing.ImageIcon;
 import loci.common.services.ServiceException;
 import loci.formats.FormatException;
@@ -32,7 +32,6 @@ import mcib3d.geom2.Objects3DIntPopulation;
 import mcib3d.geom2.Objects3DIntPopulationComputation;
 import mcib3d.geom2.measurements.MeasureIntensity;
 import mcib3d.geom2.measurements.MeasureVolume;
-import mcib3d.geom2.measurementsPopulation.MeasurePopulationColocalisation;
 import mcib3d.image3d.ImageHandler;
 import net.haesleinhuepf.clij.clearcl.ClearCLBuffer;
 import net.haesleinhuepf.clij2.CLIJ2;
@@ -372,8 +371,7 @@ public class Tools {
      * @return objects population
      */
    public Objects3DIntPopulation stardistFociInNucleusPop(ImagePlus imgFoci, Objects3DIntPopulation nucPop) throws IOException{
-        ImagePlus img = new Duplicator().run(imgFoci);
-
+       ImagePlus img = new Duplicator().run(imgFoci);
        // StarDist
        File starDistModelFile = new File(modelsPath+File.separator+stardistFociModel);
        StarDist2D star = new StarDist2D(syncObject, starDistModelFile);

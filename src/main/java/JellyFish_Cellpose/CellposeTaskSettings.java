@@ -1,4 +1,4 @@
-package JellyFich_Cellpose;
+package JellyFish_Cellpose;
 
 
 public class CellposeTaskSettings {

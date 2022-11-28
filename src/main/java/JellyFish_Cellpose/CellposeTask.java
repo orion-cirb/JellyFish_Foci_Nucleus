@@ -1,6 +1,6 @@
-package JellyFich_Cellpose;
+package JellyFish_Cellpose;
 
-import JellyFich_Cellpose.CellposeTaskSettings;
+import JellyFish_Cellpose.CellposeTaskSettings;
 import java.util.ArrayList;
 
 public class CellposeTask {

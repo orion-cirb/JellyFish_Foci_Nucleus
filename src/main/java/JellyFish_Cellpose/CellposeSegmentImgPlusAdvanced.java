@@ -1,7 +1,7 @@
-package JellyFich_Cellpose;
+package JellyFish_Cellpose;
 
-import JellyFich_Cellpose.CellposeTaskSettings;
-import JellyFich_Cellpose.CellposeTask;
+import JellyFish_Cellpose.CellposeTaskSettings;
+import JellyFish_Cellpose.CellposeTask;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
