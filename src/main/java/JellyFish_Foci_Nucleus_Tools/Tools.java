@@ -456,6 +456,8 @@ public class Tools {
             Objects3DIntPopulation fociNucPop = findFociNuc(nucLabel, fociPop);
             int fociNb = fociNucPop.getNbObjects();
             file.write(imgName+"\t"+nucLabel+"\t"+nucVol+"\t"+fociNb+"\t");
+            if (fociNb == 0)
+                file.write("\t");
             for (Object3DInt foci : fociNucPop.getObjects3DInt()) {
                 float fociLabel = foci.getLabel();
                 double fociVol = new MeasureVolume(foci).getValueMeasurement(MeasureVolume.VOLUME_UNIT);
