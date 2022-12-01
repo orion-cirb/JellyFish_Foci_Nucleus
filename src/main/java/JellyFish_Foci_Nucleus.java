@@ -125,8 +125,9 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
                 indexCh = ArrayUtils.indexOf(chsName, channels[1]);
                 ImagePlus imgFoci = BF.openImagePlus(options)[indexCh];
                 
-                // Find foci with StarDist
-                Objects3DIntPopulation fociPop = tools.stardistFociInNucleusPop(imgFoci, nucPop);
+                // Find PML foci with StarDist
+                Objects3DIntPopulation fociPop = (tools.fociDetectionMethod.equals("Stardist")) ? tools.stardistFociInNucleusPop(imgFoci, nucPop) : 
+                        tools.fociLOGDetection(imgFoci, nucPop);
                 System.out.println(fociPop.getNbObjects() + "Foci colocalized with " + tools.channelNames[0] + " nuclei");
                
                 // Save images

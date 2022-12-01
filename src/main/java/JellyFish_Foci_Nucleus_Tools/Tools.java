@@ -57,8 +57,8 @@ public class Tools {
     
     // Cellpose
     private final String cellposeEnvDirPath = (IJ.isLinux()) ? "/opt/miniconda3/envs/cellpose" : System.getProperty("user.home")+"\\miniconda3\\envs\\CellPose";
-    private String cellposeModel = "cyto2";
-    private int cellPoseNucDiameter = 60;
+    private final String cellposeModel = "cyto2";
+    private final int cellPoseNucDiameter = 60;
     
     //Stardist
     private Object syncObject = new Object();
@@ -66,18 +66,18 @@ public class Tools {
     private final double stardistPercentileTop = 99.8;
     private final double stardistProbThreshNuc = 0.5;
     private final double stardistOverlayThreshNuc = 0.25;
-    private final double stardistProbThreshFoci = 0.05;
+    private final double stardistProbThreshFoci = 0.2;
     private final double stardistOverlayThreshFoci = 0.25;
-    private File modelsPath = new File(IJ.getDirectory("imagej")+File.separator+"models");
-    public String stardistNucModel = "StandardFluo.zip";
-    public String stardistFociModel = "pmls2.zip";
-    private String stardistOutput = "Label Image"; 
+    private final File modelsPath = new File(IJ.getDirectory("imagej")+File.separator+"models");
+    public final String stardistNucModel = "StandardFluo.zip";
+    public final String stardistFociModel = "pmls2.zip";
+    private final String stardistOutput = "Label Image"; 
     
     private double minNucVol = 50;
     private double maxNucVol = 1000;
-    private double minFociVol = 0.003;
+    private double minFociVol = 0.002;
     private double maxFociVol = 2;
-    private double fociTh = 500000;
+    private double fociTh = 500;
     private String[] fociDetectionMethods = {"Stardist", "LOG"};
     public String fociDetectionMethod = "";
     
@@ -420,6 +420,7 @@ public class Tools {
        ImageLabeller labeller = new ImageLabeller();
        ImageInt labels = labeller.getLabels(ImageHandler.wrap(imgLOG));
        flush_close(imgLOG);
+       
        Objects3DIntPopulation fociPop = new Objects3DIntPopulation(labels);
        labels.closeImagePlus();
        System.out.println("Found "+fociPop.getNbObjects()+" foci");
