@@ -68,7 +68,7 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
                 outDir.mkdir();
             }
             // Write header in results file
-            String header = "Image name\tNucleus ID\tNucleus volume (µm3)\tFoci nb\t#Foci\tFoci volume(µm3)\tFoci sum intensity\n";
+            String header = "Image name\tNucleus ID\tNucleus volume (µm3)\tNucleus intensity in foci channel\tFoci nb\t#Foci\tFoci volume(µm3)\tFoci sum intensity\n";
             FileWriter fwResults = new FileWriter(outDirResults + "results.xls", false);
             outPutResults = new BufferedWriter(fwResults);
             outPutResults.write(header);
@@ -124,7 +124,7 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
                 indexCh = ArrayUtils.indexOf(chsName, channels[1]);
                 ImagePlus imgFoci = BF.openImagePlus(options)[indexCh];
                 
-                // Find PML foci with StarDist
+                // Find foci with StarDist
                 Objects3DIntPopulation fociPop = tools.stardistFociInNucleusPop(imgFoci, nucPop);
                 System.out.println(fociPop.getNbObjects() + "Foci colocalized with " + tools.channelNames[0] + " nuclei");
                

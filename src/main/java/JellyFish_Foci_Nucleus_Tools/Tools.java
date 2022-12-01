@@ -6,10 +6,13 @@ import JellyFish_StardistOrion.StarDist2D;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
+import ij.Prefs;
+import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
 import ij.plugin.RGBStackMerge;
+import ij.process.ImageConverter;
 import ij.process.ImageProcessor;
 import io.scif.DependencyException;
 import java.awt.Color;
@@ -32,11 +35,14 @@ import mcib3d.geom2.Objects3DIntPopulationComputation;
 import mcib3d.geom2.measurements.MeasureIntensity;
 import mcib3d.geom2.measurements.MeasureVolume;
 import mcib3d.image3d.ImageHandler;
-import net.haesleinhuepf.clij.clearcl.ClearCLBuffer;
 import net.haesleinhuepf.clij2.CLIJ2;
 import org.apache.commons.io.FilenameUtils;
 import org.scijava.util.ArrayUtils;
 import mcib3d.geom2.measurements.MeasureCentroid;
+import mcib3d.image3d.ImageInt;
+import mcib3d.image3d.ImageLabeller;
+import net.haesleinhuepf.clij.clearcl.ClearCLBuffer;
+
 
 /**
  * @author phm
@@ -60,7 +66,7 @@ public class Tools {
     private final double stardistPercentileTop = 99.8;
     private final double stardistProbThreshNuc = 0.5;
     private final double stardistOverlayThreshNuc = 0.25;
-    private final double stardistProbThreshFoci = 0.2;
+    private final double stardistProbThreshFoci = 0.05;
     private final double stardistOverlayThreshFoci = 0.25;
     private File modelsPath = new File(IJ.getDirectory("imagej")+File.separator+"models");
     public String stardistNucModel = "StandardFluo.zip";
@@ -69,8 +75,11 @@ public class Tools {
     
     private double minNucVol = 50;
     private double maxNucVol = 1000;
-    private double minFociVol = 0.02;
+    private double minFociVol = 0.003;
     private double maxFociVol = 2;
+    private double fociTh = 500000;
+    private String[] fociDetectionMethods = {"Stardist", "LOG"};
+    public String fociDetectionMethod = "";
     
     
     /**
@@ -90,6 +99,12 @@ public class Tools {
             IJ.log("CLIJ not installed, please install from update site");
             return false;
         }
+//        try {
+//            loader.loadClass("uk.ac.sussex.gdsc-core-ij.ImageJUtils");
+//        } catch (ClassNotFoundException e) {
+//            IJ.log("GDSC not installed, please install from update site");
+//            return false;
+//        }
         return true;
     }
     
@@ -133,6 +148,9 @@ public class Tools {
                     ext = fileExt;
                     break;
                 case "isc2" :
+                    ext = fileExt;
+                    break;
+                case "lsm" :
                     ext = fileExt;
                     break;
                 case "tif" :
@@ -224,6 +242,13 @@ public class Tools {
                     else 
                         channels[n] = meta.getChannelExcitationWavelength(0, n).value().toString();
                 break;    
+            case "lsm" :
+                for (int n = 0; n < chs; n++) 
+                    if (meta.getChannelID(0, n) == null)
+                        channels[n] = Integer.toString(n);
+                    else 
+                        channels[n] = channels[n] = meta.getChannelName(0, n).toString();
+                break; 
             default :
                 for (int n = 0; n < chs; n++)
                     channels[n] = Integer.toString(n);
@@ -251,8 +276,10 @@ public class Tools {
         gd.addNumericField("Max nucleus volume (µm3): ", maxNucVol);
         
         gd.addMessage("Foci detection", Font.getFont("Monospace"), Color.blue);
+        gd.addChoice("Foci detection method : ", fociDetectionMethods, fociDetectionMethods[0]);
         gd.addNumericField("Min foci volume (µm3): ", minFociVol);
         gd.addNumericField("Max foci volume (µm3): ", maxFociVol);
+        gd.addNumericField("Foci intensity threshold : ", fociTh);
         
         gd.addMessage("Image calibration", Font.getFont("Monospace"), Color.blue);
         gd.addNumericField("XY pixel size (µm): ", cal.pixelWidth);
@@ -267,8 +294,10 @@ public class Tools {
 
         minNucVol = gd.getNextNumber();
         maxNucVol = gd.getNextNumber();
+        fociDetectionMethod = gd.getNextChoice();
         minFociVol = gd.getNextNumber();
         maxFociVol = gd.getNextNumber();
+        fociTh = gd.getNextNumber();
         
         cal.pixelWidth = cal.pixelHeight = gd.getNextNumber();
         cal.pixelDepth = gd.getNextNumber();
@@ -284,20 +313,6 @@ public class Tools {
     public void flush_close(ImagePlus img) {
         img.flush();
         img.close();
-    }
-    
-    
-    /**
-     * Median filter using CLIJ2
-     */ 
-    public ImagePlus median_filter(ImagePlus img, double sizeXY, double sizeZ) {
-       ClearCLBuffer imgCL = clij2.push(img);
-       ClearCLBuffer imgCLMed = clij2.create(imgCL);
-       clij2.median3DBox(imgCL, imgCLMed, sizeXY, sizeXY, sizeZ);
-       clij2.release(imgCL);
-       ImagePlus imgMed = clij2.pull(imgCLMed);
-       clij2.release(imgCLMed);
-       return(imgMed);
     }
     
     
@@ -339,6 +354,9 @@ public class Tools {
            img = new Duplicator().run(imgNuc);
        }
        
+       // Remove outliers
+       //IJ.run(img, "Remove Outliers", "block_radius_x=10 block_radius_y=10 standard_deviations=1 stack");
+       
        // StarDist
        File starDistModelFile = new File(modelsPath+File.separator+stardistNucModel);
        StarDist2D star = new StarDist2D(syncObject, starDistModelFile);
@@ -362,12 +380,68 @@ public class Tools {
    }
    
    /**
+     * Remove objects in population with intensity < intTh
+     * @param pop
+     * @param img
+     * @param intTh 
+     */
+    public void intensityFilter(Objects3DIntPopulation pop, ImagePlus img, double intTh) {
+        ImageHandler imh = ImageHandler.wrap(img);
+        pop.getObjects3DInt().removeIf(p -> (new MeasureIntensity(p, imh).getValueMeasurement(MeasureIntensity.INTENSITY_SUM) < intTh));
+        pop.resetLabels();
+    }
+    
+    
+    /**
+     * Median filter using CLIJ2
+     * @param img
+     * @param sizeXY
+     * @param sizeZ
+     * @return 
+     */ 
+    public ImagePlus  median_filter(ImagePlus img, double sizeXY, double sizeZ) {
+       ClearCLBuffer imgCL = clij2.push(img);
+       ClearCLBuffer imgCLMed = clij2.create(imgCL);
+       clij2.median3DBox(imgCL, imgCLMed, sizeXY, sizeXY, sizeZ);
+       ImagePlus imgMed = clij2.pull(imgCLMed);
+       return(imgMed);
+    }  
+    
+    
+   public Objects3DIntPopulation fociLOGDetection (ImagePlus imgFoci, Objects3DIntPopulation nucPop) {
+       ImagePlus imgLOG = new Duplicator().run(imgFoci);
+       IJ.run(imgLOG, "Laplacian of Gaussian", "sigma=2 scale_normalised negate stack");
+       IJ.run(imgLOG, "Median...", "radius=2 stack");
+       IJ.setAutoThreshold(imgLOG, "Moments dark stack");
+       Prefs.blackBackground = false;
+       IJ.run(imgLOG, "Convert to Mask", "method=Moments background=Dark");
+       imgLOG.setCalibration(cal);
+       // label binary images first
+       ImageLabeller labeller = new ImageLabeller();
+       ImageInt labels = labeller.getLabels(ImageHandler.wrap(imgLOG));
+       flush_close(imgLOG);
+       Objects3DIntPopulation fociPop = new Objects3DIntPopulation(labels);
+       labels.closeImagePlus();
+       System.out.println("Found "+fociPop.getNbObjects()+" foci");
+       popFilterSize(fociPop, minFociVol, maxFociVol);
+       System.out.println("Found "+fociPop.getNbObjects()+" foci after size filter");
+       intensityFilter(fociPop, imgFoci, fociTh);
+       System.out.println("Found "+fociPop.getNbObjects()+" foci after intensity filter");
+       // labels foci with nucleus label
+       findFociInNucleusPop(nucPop, fociPop);
+       System.out.println("Found "+fociPop.getNbObjects()+" foci in nucleus");
+       return(fociPop);
+   }
+   
+   
+   /**
      * Apply StarDist 2D slice by slice
      * Label detections in 3D
      * @return objects population
      */
    public Objects3DIntPopulation stardistFociInNucleusPop(ImagePlus imgFoci, Objects3DIntPopulation nucPop) throws IOException{
        ImagePlus img = new Duplicator().run(imgFoci);
+       IJ.run(img, "Median...", "radius=2 stack");
        // StarDist
        File starDistModelFile = new File(modelsPath+File.separator+stardistFociModel);
        StarDist2D star = new StarDist2D(syncObject, starDistModelFile);
@@ -385,6 +459,8 @@ public class Tools {
        System.out.println("Found "+fociPop.getNbObjects()+" foci");
        popFilterSize(fociPop, minFociVol, maxFociVol);
        System.out.println("Found "+fociPop.getNbObjects()+" foci after size filter");
+       intensityFilter(fociPop, imgFoci, fociTh);
+        System.out.println("Found "+fociPop.getNbObjects()+" foci after intensity filter");
        flush_close(imgLabels);
        // labels foci with nucleus label
        findFociInNucleusPop(nucPop, fociPop);
@@ -408,11 +484,13 @@ public class Tools {
         // Set Cellpose settings
         CellposeTaskSettings settings = new CellposeTaskSettings(cellposeModel, 1, cellPoseNucDiameter, cellposeEnvDirPath);
         settings.useGpu(true);
+        settings.setFlowTh(0.4);
         settings.setStitchThreshold(0.25);
         // Run Omnipose
         CellposeSegmentImgPlusAdvanced cellpose = new CellposeSegmentImgPlusAdvanced(settings, imgIn);
         ImagePlus imgOut = (resize) ? cellpose.run().resize(imgWidth, imgHeight, 1, "none") : cellpose.run();   
         imgOut.setCalibration(cal);
+        
         Objects3DIntPopulation pop = new Objects3DIntPopulation(ImageHandler.wrap(imgOut));
         Objects3DIntPopulation popFilter = new Objects3DIntPopulationComputation(pop).getExcludeBorders(ImageHandler.wrap(img), false);
         popFilterOneZ(popFilter);
@@ -445,13 +523,15 @@ public class Tools {
      * @param file
      * @throws java.io.IOException
      */
-    public void saveResults(Objects3DIntPopulation nucPop, Objects3DIntPopulation fociPop, ImagePlus imgFoci, String imgName, BufferedWriter file) throws IOException {
+    public void saveResults(Objects3DIntPopulation nucPop, Objects3DIntPopulation fociPop, ImagePlus imgFoci, String imgName, 
+            BufferedWriter file) throws IOException {
         for (Object3DInt nuc : nucPop.getObjects3DInt()) {
             float nucLabel = nuc.getLabel();
             double nucVol = new MeasureVolume(nuc).getValueMeasurement(MeasureVolume.VOLUME_UNIT);
+            double nucInt = new MeasureIntensity(nuc, ImageHandler.wrap(imgFoci)).getValueMeasurement(MeasureIntensity.INTENSITY_SUM);
             Objects3DIntPopulation fociNucPop = findFociNuc(nucLabel, fociPop);
             int fociNb = fociNucPop.getNbObjects();
-            file.write(imgName+"\t"+nucLabel+"\t"+nucVol+"\t"+fociNb+"\t");
+            file.write(imgName+"\t"+nucLabel+"\t"+nucVol+"\t"+nucInt+"\t"+fociNb+"\t");
             if (fociNb == 0)
                 file.write("\n");
             for (Object3DInt foci : fociNucPop.getObjects3DInt()) {
@@ -459,7 +539,7 @@ public class Tools {
                 double fociVol = new MeasureVolume(foci).getValueMeasurement(MeasureVolume.VOLUME_UNIT);
                 double fociInt = new MeasureIntensity(foci, ImageHandler.wrap(imgFoci)).getValueMeasurement(MeasureIntensity.INTENSITY_SUM);
                 if (fociLabel != 1)
-                    file.write("\t\t\t\t");
+                    file.write("\t\t\t\t\t");
                 file.write(fociLabel+"\t"+fociVol+"\t"+fociInt+"\n");
                 file.flush();
             }
@@ -540,7 +620,7 @@ public class Tools {
         ImagePlus imgObjects = new RGBStackMerge().mergeHyperstacks(imgColors, false);
         imgObjects.setCalibration(img.getCalibration());
         FileSaver ImgObjectsFile = new FileSaver(imgObjects);
-        ImgObjectsFile.saveAsTiff(outDir + imageName + ".tif"); 
+        ImgObjectsFile.saveAsTiff(outDir + imageName + "_" + fociDetectionMethod + ".tif"); 
         imgObj1.closeImagePlus();
         imgObj2.closeImagePlus();
         flush_close(imgObjects);
