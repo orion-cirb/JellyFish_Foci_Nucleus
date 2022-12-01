@@ -61,18 +61,7 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
                 return;
             }   
             
-            // Create output folder
-            outDirResults = imageDir + File.separator + "Results" + File.separator;
-            File outDir = new File(outDirResults);
-            if (!Files.exists(Paths.get(outDirResults))) {
-                outDir.mkdir();
-            }
-            // Write header in results file
-            String header = "Image name\tNucleus ID\tNucleus volume (µm3)\tNucleus intensity in foci channel\tFoci nb\t#Foci\tFoci volume(µm3)\tFoci sum intensity\n";
-            FileWriter fwResults = new FileWriter(outDirResults + "results.xls", false);
-            outPutResults = new BufferedWriter(fwResults);
-            outPutResults.write(header);
-            outPutResults.flush();
+            
                       
             // Create OME-XML metadata store of the latest schema version
             ServiceFactory factory;
@@ -94,8 +83,20 @@ public class JellyFish_Foci_Nucleus implements PlugIn {
             if (channels == null) {
                 IJ.showStatus("Plugin cancelled");
                 return;
-            }         
+            }  
             
+            // Create output folder
+            outDirResults = imageDir + File.separator + "Results" + File.separator;
+            File outDir = new File(outDirResults);
+            if (!Files.exists(Paths.get(outDirResults))) {
+                outDir.mkdir();
+            }
+            // Write header in results file
+            String header = "Image name\tNucleus ID\tNucleus volume (µm3)\tNucleus intensity in foci channel\tFoci nb\t#Foci\tFoci volume(µm3)\tFoci sum intensity\n";
+            FileWriter fwResults = new FileWriter(outDirResults + "results_"+tools.fociDetectionMethod+".xls", false);
+            outPutResults = new BufferedWriter(fwResults);
+            outPutResults.write(header);
+            outPutResults.flush();
             
             for (String f : imageFiles) {
                 String rootName = FilenameUtils.getBaseName(f);
