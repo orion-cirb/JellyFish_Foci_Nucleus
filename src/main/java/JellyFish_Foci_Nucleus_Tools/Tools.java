@@ -7,12 +7,10 @@ import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.Prefs;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
 import ij.plugin.RGBStackMerge;
-import ij.process.ImageConverter;
 import ij.process.ImageProcessor;
 import io.scif.DependencyException;
 import java.awt.Color;
@@ -147,7 +145,7 @@ public class Tools {
                 case "lif"  :
                     ext = fileExt;
                     break;
-                case "isc2" :
+                case "ics" :
                     ext = fileExt;
                     break;
                 case "lsm" :
